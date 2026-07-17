@@ -231,14 +231,19 @@
     };
     Object.keys(MAPPA_AZIONI_).forEach(nome => {
       proxy[nome] = function (...args) {
-        MAPPA_AZIONI_[nome](args)
-          .then(risultato => { if (successHandler) successHandler(risultato); })
-          .catch(err => { if (failureHandler) failureHandler(err); else console.error(err); });
-        // Ogni chiamata usa la propria coppia di handler "una tantum": si azzerano
-        // subito dopo l'uso, così una chiamata successiva senza handler espliciti non
-        // riusa per errore quelli di una chiamata precedente.
+        // BUGFIX: fetch() è asincrono. Prima si catturano gli handler correnti in
+        // variabili locali e SOLO DOPO si azzerano quelli condivisi: così, quando la
+        // risposta arriva più tardi, .then()/.catch() richiamano ancora la callback
+        // giusta invece di trovarla già a null (il bug che teneva bloccati i bottoni
+        // su "...in corso" e non caricava mai giacenze/alerts).
+        const onSuccess = successHandler;
+        const onFailure = failureHandler;
         successHandler = null;
         failureHandler = null;
+
+        MAPPA_AZIONI_[nome](args)
+          .then(risultato => { if (onSuccess) onSuccess(risultato); })
+          .catch(err => { if (onFailure) onFailure(err); else console.error(err); });
       };
     });
     return proxy;
